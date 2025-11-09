@@ -1,5 +1,6 @@
 package com.example.servicea;
 
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +40,7 @@ public class ServiceAController {
         return finalResponse;
     }
     
+    @Observed(name = "service-a.validate-request")
     private void validateRequest(String orderId) {
         logger.debug("Service A: Validating order ID {}", orderId);
         if (orderId == null || orderId.isEmpty()) {
@@ -46,6 +48,7 @@ public class ServiceAController {
         }
     }
     
+    @Observed(name = "service-a.prepare-metadata")
     private Map<String, Object> prepareOrderMetadata(String orderId) {
         logger.debug("Service A: Preparing metadata for order {}", orderId);
         Map<String, Object> metadata = new HashMap<>();
@@ -55,6 +58,7 @@ public class ServiceAController {
         return metadata;
     }
     
+    @Observed(name = "service-a.format-response")
     private String formatResponse(String orderResponse) {
         logger.debug("Service A: Formatting response");
         return "Service A -> " + orderResponse;

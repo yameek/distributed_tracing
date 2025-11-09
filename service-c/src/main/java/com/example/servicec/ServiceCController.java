@@ -1,5 +1,6 @@
 package com.example.servicec;
 
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +29,7 @@ public class ServiceCController {
         return "Service C (Inventory): Stock available for order " + orderId;
     }
     
+    @Observed(name = "service-c.query-database")
     private void queryDatabase(String orderId) {
         logger.debug("Service C: Querying database for order {}", orderId);
         try {
@@ -37,6 +39,7 @@ public class ServiceCController {
         }
     }
     
+    @Observed(name = "service-c.check-stock-level")
     private int checkStockLevel(String orderId) {
         logger.debug("Service C: Checking stock level for order {}", orderId);
         try {
@@ -47,6 +50,7 @@ public class ServiceCController {
         return 100 + orderId.hashCode() % 50;
     }
     
+    @Observed(name = "service-c.reserve-inventory")
     private void reserveInventory(String orderId, int quantity) {
         logger.debug("Service C: Reserving {} units for order {}", quantity, orderId);
         try {
@@ -56,6 +60,7 @@ public class ServiceCController {
         }
     }
     
+    @Observed(name = "service-c.update-cache")
     private void updateInventoryCache(String orderId) {
         logger.debug("Service C: Updating cache for order {}", orderId);
         try {

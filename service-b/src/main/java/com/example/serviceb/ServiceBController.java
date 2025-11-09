@@ -1,5 +1,6 @@
 package com.example.serviceb;
 
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,7 @@ public class ServiceBController {
         return "Service B (Order) -> " + inventoryResponse;
     }
     
+    @Observed(name = "service-b.check-eligibility")
     private void checkOrderEligibility(String orderId) {
         logger.debug("Service B: Checking eligibility for order {}", orderId);
         try {
@@ -45,6 +47,7 @@ public class ServiceBController {
         }
     }
     
+    @Observed(name = "service-b.calculate-amount")
     private double calculateOrderAmount(String orderId) {
         logger.debug("Service B: Calculating amount for order {}", orderId);
         try {
@@ -55,6 +58,7 @@ public class ServiceBController {
         return 99.99 + orderId.hashCode() % 100;
     }
     
+    @Observed(name = "service-b.apply-business-rules")
     private void applyBusinessRules(String orderId, double amount) {
         logger.debug("Service B: Applying business rules for order {} with amount ${}", orderId, amount);
         try {
