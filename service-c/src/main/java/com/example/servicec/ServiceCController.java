@@ -15,14 +15,54 @@ public class ServiceCController {
     public String checkInventory(@PathVariable String orderId) {
         logger.info("Service C: Checking inventory for order {}", orderId);
         
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        queryDatabase(orderId);
+        
+        int stockLevel = checkStockLevel(orderId);
+        logger.info("Service C: Stock level for order {}: {}", orderId, stockLevel);
+        
+        reserveInventory(orderId, stockLevel);
+        
+        updateInventoryCache(orderId);
         
         logger.info("Service C: Inventory check completed for order {}", orderId);
         return "Service C (Inventory): Stock available for order " + orderId;
+    }
+    
+    private void queryDatabase(String orderId) {
+        logger.debug("Service C: Querying database for order {}", orderId);
+        try {
+            Thread.sleep(50);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    private int checkStockLevel(String orderId) {
+        logger.debug("Service C: Checking stock level for order {}", orderId);
+        try {
+            Thread.sleep(40);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return 100 + orderId.hashCode() % 50;
+    }
+    
+    private void reserveInventory(String orderId, int quantity) {
+        logger.debug("Service C: Reserving {} units for order {}", quantity, orderId);
+        try {
+            Thread.sleep(30);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    private void updateInventoryCache(String orderId) {
+        logger.debug("Service C: Updating cache for order {}", orderId);
+        try {
+            Thread.sleep(20);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
     
     @GetMapping("/health")
