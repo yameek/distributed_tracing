@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - tracing-network
+
+  service-a:
+    build:
+      context: ./service-a
+      dockerfile: Dockerfile
+    container_name: service-a
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_APPLICATION_NAME=service-a
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+    depends_on:
+      - zipkin
+      - service-b
+    networks:
+      - tracing-network
+
+  service-b:
+    build:
+      context: ./service-b
+      dockerfile: Dockerfile
+    container_name: service-b
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_APPLICATION_NAME=service-b
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+    depends_on:
+      - zipkin
+      - service-c
+    networks:
+      - tracing-network
+
+  service-c:
+    build:
+      context: ./service-c
+      dockerfile: Dockerfile
+    container_name: service-c
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_APPLICATION_NAME=service-c
+      - MANAGEMENT_ZIPKIN_TRACING_ENDPOINT=http://zipkin:9411/api/v2/spans
+    depends_on:
+      - zipkin
+    networks:
+      - tracing-network
+
+networks:
+  tracing-network:
+    driver: bridge
