@@ -8,6 +8,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 public class ServiceAController {
     
@@ -20,12 +23,40 @@ public class ServiceAController {
     public String getOrder(@PathVariable String orderId) {
         logger.info("Service A: Received request for order {}", orderId);
         
+        validateRequest(orderId);
+        
+        Map<String, Object> orderMetadata = prepareOrderMetadata(orderId);
+        logger.info("Service A: Order metadata prepared: {}", orderMetadata);
+        
         String orderResponse = restTemplate.getForObject(
             "http://localhost:8081/order/" + orderId, 
             String.class
         );
         
+        String finalResponse = formatResponse(orderResponse);
+        
         logger.info("Service A: Completed request for order {}", orderId);
+        return finalResponse;
+    }
+    
+    private void validateRequest(String orderId) {
+        logger.debug("Service A: Validating order ID {}", orderId);
+        if (orderId == null || orderId.isEmpty()) {
+            throw new IllegalArgumentException("Order ID cannot be empty");
+        }
+    }
+    
+    private Map<String, Object> prepareOrderMetadata(String orderId) {
+        logger.debug("Service A: Preparing metadata for order {}", orderId);
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("orderId", orderId);
+        metadata.put("timestamp", System.currentTimeMillis());
+        metadata.put("source", "service-a");
+        return metadata;
+    }
+    
+    private String formatResponse(String orderResponse) {
+        logger.debug("Service A: Formatting response");
         return "Service A -> " + orderResponse;
     }
     
