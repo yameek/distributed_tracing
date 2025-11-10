@@ -1,0 +1,360 @@
+{
+	"info": {
+		"_postman_id": "distributed-tracing-microservices",
+		"name": "Distributed Tracing Microservices",
+		"description": "Complete API collection for testing distributed tracing across 4 microservices (A, B, C, D) with Zipkin",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Service A - API Gateway (8080)",
+			"item": [
+				{
+					"name": "Process Order (Main Flow)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/order/ORDER-123",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "order", "ORDER-123"]
+						},
+						"description": "Main entry point - triggers full flow A → B → C → D → A (callback)"
+					},
+					"response": []
+				},
+				{
+					"name": "Callback Handler",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/callback/ORDER-123",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "callback", "ORDER-123"]
+						},
+						"description": "Callback endpoint called by Service D"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["health"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Service B - Order Service (8081)",
+			"item": [
+				{
+					"name": "Process Order",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/order/ORDER-123",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8081",
+							"path": ["order", "ORDER-123"]
+						},
+						"description": "Process order, calls Service C and Service D"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8081/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8081",
+							"path": ["health"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Service C - Inventory Service (8082)",
+			"item": [
+				{
+					"name": "Check Inventory",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/inventory/ORDER-123",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8082",
+							"path": ["inventory", "ORDER-123"]
+						},
+						"description": "Check inventory and notify Service D"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8082/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8082",
+							"path": ["health"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Service D - Notification Service (8083)",
+			"item": [
+				{
+					"name": "Send Notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"orderId\": \"ORDER-123\",\n  \"type\": \"ORDER_UPDATE\",\n  \"status\": \"PROCESSED\",\n  \"channel\": \"EMAIL\",\n  \"callbackRequired\": true\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8083/notify",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8083",
+							"path": ["notify"]
+						},
+						"description": "Send notification (sync + async via RabbitMQ)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Notification Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8083/notifications/ORDER-123",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8083",
+							"path": ["notifications", "ORDER-123"]
+						},
+						"description": "Check notification status for an order"
+					},
+					"response": []
+				},
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8083/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8083",
+							"path": ["health"]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Zipkin - Tracing Backend (9411)",
+			"item": [
+				{
+					"name": "Zipkin Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:9411/health",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "9411",
+							"path": ["health"]
+						},
+						"description": "Check if Zipkin is running"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Traces",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:9411/api/v2/traces?limit=10",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "9411",
+							"path": ["api", "v2", "traces"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						},
+						"description": "Retrieve last 10 traces"
+					},
+					"response": []
+				},
+				{
+					"name": "Search Traces by Service",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:9411/api/v2/traces?serviceName=service-a&limit=5",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "9411",
+							"path": ["api", "v2", "traces"],
+							"query": [
+								{
+									"key": "serviceName",
+									"value": "service-a"
+								},
+								{
+									"key": "limit",
+									"value": "5"
+								}
+							]
+						},
+						"description": "Get traces for a specific service"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Services List",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:9411/api/v2/services",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "9411",
+							"path": ["api", "v2", "services"]
+						},
+						"description": "List all services reporting to Zipkin"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Service Dependencies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:9411/api/v2/dependencies?endTs={{current_timestamp}}&lookback=86400000",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "9411",
+							"path": ["api", "v2", "dependencies"],
+							"query": [
+								{
+									"key": "endTs",
+									"value": "{{current_timestamp}}"
+								},
+								{
+									"key": "lookback",
+									"value": "86400000",
+									"description": "24 hours in milliseconds"
+								}
+							]
+						},
+						"description": "Get service dependency graph data"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Test Scenarios",
+			"item": [
+				{
+					"name": "Full Flow Test",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/api/order/FULL-FLOW-TEST",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["api", "order", "FULL-FLOW-TEST"]
+						},
+						"description": "Test complete flow: A → B → C → D → RabbitMQ → D → A (callback)"
+					},
+					"response": []
+				},
+				{
+					"name": "Direct Service D Notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"orderId\": \"DIRECT-TEST-456\",\n  \"type\": \"ORDER_SHIPPED\",\n  \"status\": \"SHIPPED\",\n  \"channel\": \"SMS\",\n  \"callbackRequired\": false\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8083/notify",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8083",
+							"path": ["notify"]
+						},
+						"description": "Test Service D directly without callback"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "current_timestamp",
+			"value": "{{$timestamp}}",
+			"type": "string"
+		}
+	]
+}
