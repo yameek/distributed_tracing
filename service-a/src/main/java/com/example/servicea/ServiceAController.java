@@ -68,4 +68,34 @@ public class ServiceAController {
     public String health() {
         return "Service A is running";
     }
+    
+    @GetMapping("/api/callback/{orderId}")
+    public String handleCallback(@PathVariable String orderId) {
+        logger.info("Service A: Received callback from Service D for order {}", orderId);
+        
+        processCallback(orderId);
+        
+        updateOrderStatus(orderId);
+        
+        logger.info("Service A: Callback processed for order {}", orderId);
+        return "Service A: Callback received for order " + orderId;
+    }
+    
+    private void processCallback(String orderId) {
+        logger.debug("Service A: Processing callback for order {}", orderId);
+        try {
+            Thread.sleep(30);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    private void updateOrderStatus(String orderId) {
+        logger.debug("Service A: Updating order status for {}", orderId);
+        try {
+            Thread.sleep(20);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }

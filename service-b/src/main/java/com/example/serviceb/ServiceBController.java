@@ -33,8 +33,15 @@ public class ServiceBController {
         
         applyBusinessRules(orderId, orderAmount);
         
+        notifyServiceD(orderId, "PROCESSED");
+        
         logger.info("Service B: Order {} processed successfully", orderId);
         return "Service B (Order) -> " + inventoryResponse;
+    }
+    
+    @GetMapping("/health")
+    public String health() {
+        return "Service B is running";
     }
     
     @Observed(name = "service-b.check-eligibility")
@@ -68,8 +75,18 @@ public class ServiceBController {
         }
     }
     
-    @GetMapping("/health")
-    public String health() {
-        return "Service B is running";
+    private void notifyServiceD(String orderId, String status) {
+        logger.info("Service B: Notifying Service D about order {}", orderId);
+        try {
+            String payload = String.format("{\"orderId\":\"%s\",\"type\":\"ORDER_UPDATE\",\"status\":\"%s\",\"channel\":\"EMAIL\",\"callbackRequired\":true}", 
+                orderId, status);
+            restTemplate.postForObject(
+                "http://localhost:8083/notify", 
+                payload,
+                String.class
+            );
+        } catch (Exception e) {
+            logger.warn("Service B: Failed to notify Service D: {}", e.getMessage());
+        }
     }
 }
