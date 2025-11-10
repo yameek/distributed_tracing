@@ -1,4 +1,4 @@
-package com.example.servicec;
+package com.example.serviced;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -6,10 +6,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.web.client.RestTemplate;
 
 @SpringBootApplication
-public class ServiceCApplication {
+public class ServiceDApplication {
     
     public static void main(String[] args) {
-        SpringApplication.run(ServiceCApplication.class, args);
+        SpringApplication.run(ServiceDApplication.class, args);
     }
     
     @Bean
