@@ -1,5 +1,6 @@
 package com.example.serviced;
 
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,6 +60,7 @@ public class ServiceDController {
         return "Service D is running";
     }
     
+    @Observed(name = "service-d.validate-request")
     private void validateNotificationRequest(NotificationRequest request) {
         logger.debug("Service D: Validating notification request");
         try {
@@ -71,6 +73,7 @@ public class ServiceDController {
         }
     }
     
+    @Observed(name = "service-d.load-template")
     private String loadNotificationTemplate(String type) {
         logger.debug("Service D: Loading notification template for type {}", type);
         try {
@@ -81,6 +84,7 @@ public class ServiceDController {
         return "Dear Customer, your order {{orderId}} is {{status}}";
     }
     
+    @Observed(name = "service-d.personalize-message")
     private String personalizeMessage(String template, NotificationRequest request) {
         logger.debug("Service D: Personalizing message for order {}", request.getOrderId());
         try {
@@ -92,6 +96,7 @@ public class ServiceDController {
                        .replace("{{status}}", request.getStatus());
     }
     
+    @Observed(name = "service-d.send-to-channel")
     private boolean sendToChannel(String channel, String message) {
         logger.debug("Service D: Sending notification via channel {}", channel);
         try {
@@ -102,6 +107,7 @@ public class ServiceDController {
         return true;
     }
     
+    @Observed(name = "service-d.audit-notification")
     private void auditNotification(NotificationRequest request) {
         logger.debug("Service D: Auditing notification for order {}", request.getOrderId());
         try {
@@ -111,6 +117,7 @@ public class ServiceDController {
         }
     }
     
+    @Observed(name = "service-d.trigger-callback")
     private void triggerCallback(String orderId) {
         logger.debug("Service D: Triggering callback to Service A for order {}", orderId);
         try {
@@ -124,6 +131,7 @@ public class ServiceDController {
         }
     }
     
+    @Observed(name = "service-d.check-history")
     private String checkNotificationHistory(String orderId) {
         logger.debug("Service D: Checking notification history for order {}", orderId);
         try {

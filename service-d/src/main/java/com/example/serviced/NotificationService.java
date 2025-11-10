@@ -1,5 +1,6 @@
 package com.example.serviced;
 
+import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -47,6 +48,7 @@ public class NotificationService {
         logger.info("Service D: Async notification processed for order {}", request.getOrderId());
     }
     
+    @Observed(name = "service-d.prepare-data")
     private void prepareNotificationData(NotificationRequest request) {
         logger.debug("Service D: Preparing notification data");
         try {
@@ -56,6 +58,7 @@ public class NotificationService {
         }
     }
     
+    @Observed(name = "service-d.enrich-userdata")
     private void enrichNotificationWithUserData(NotificationRequest request) {
         logger.debug("Service D: Enriching with user data");
         try {
@@ -65,6 +68,7 @@ public class NotificationService {
         }
     }
     
+    @Observed(name = "service-d.format-content")
     private void formatNotificationContent(NotificationRequest request) {
         logger.debug("Service D: Formatting notification content");
         try {
@@ -74,6 +78,7 @@ public class NotificationService {
         }
     }
     
+    @Observed(name = "service-d.deliver-notification")
     private void deliverNotification(NotificationRequest request) {
         logger.debug("Service D: Delivering notification via {}", request.getChannel());
         try {
@@ -83,6 +88,7 @@ public class NotificationService {
         }
     }
     
+    @Observed(name = "service-d.async-callback")
     private void sendCallbackToServiceA(String orderId) {
         logger.info("Service D: Sending callback to Service A for order {}", orderId);
         try {
