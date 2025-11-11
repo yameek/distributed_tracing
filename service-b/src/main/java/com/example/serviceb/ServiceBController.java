@@ -30,14 +30,14 @@ public class ServiceBController {
         logger.info("Service B: Order amount calculated: ${}", orderAmount);
         
         String inventoryResponse = restTemplate.getForObject(
-            "http://localhost:8082/inventory/" + orderId, 
+            "http://service-c:8082/inventory/" + orderId, 
             String.class
         );
         
         applyBusinessRules(orderId, orderAmount);
         
         String callbackResponse = restTemplate.getForObject(
-            "http://localhost:8080/process/" + orderId,
+            "http://service-a:8080/process/" + orderId,
             String.class
         );
         

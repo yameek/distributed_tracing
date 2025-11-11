@@ -33,12 +33,12 @@ public class ServiceAController {
         logger.info("Service A: Order metadata prepared: {}", orderMetadata);
         
         String orderResponse = restTemplate.getForObject(
-            "http://localhost:8081/order/" + orderId, 
+            "http://service-b:8081/order/" + orderId, 
             String.class
         );
         
         String inventoryResponse = restTemplate.getForObject(
-            "http://localhost:8082/inventory/" + orderId,
+            "http://service-c:8082/inventory/" + orderId,
             String.class
         );
         

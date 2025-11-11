@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq-metrics
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    networks:
+      - metrics-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    networks:
+      - metrics-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - metrics-network
+    depends_on:
+      - prometheus
+
+  service-a:
+    build:
+      context: ./service-a
+      dockerfile: Dockerfile
+    container_name: service-a
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_APPLICATION_NAME=service-a
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - metrics-network
+
+  service-b:
+    build:
+      context: ./service-b
+      dockerfile: Dockerfile
+    container_name: service-b
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_APPLICATION_NAME=service-b
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - metrics-network
+
+  service-c:
+    build:
+      context: ./service-c
+      dockerfile: Dockerfile
+    container_name: service-c
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_APPLICATION_NAME=service-c
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - metrics-network
+
+  service-d:
+    build:
+      context: ./service-d
+      dockerfile: Dockerfile
+    container_name: service-d
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_APPLICATION_NAME=service-d
+      - SPRING_RABBITMQ_HOST=rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - metrics-network
+
+networks:
+  metrics-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:

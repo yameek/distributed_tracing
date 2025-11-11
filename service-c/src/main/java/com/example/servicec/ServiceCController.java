@@ -36,7 +36,7 @@ public class ServiceCController {
         updateInventoryCache(orderId);
         
         String callbackResponse = restTemplate.getForObject(
-            "http://localhost:8080/verify/" + orderId,
+            "http://service-a:8080/verify/" + orderId,
             String.class
         );
         
