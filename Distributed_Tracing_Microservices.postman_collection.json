@@ -21,12 +21,12 @@
 							"port": "8080",
 							"path": ["api", "order", "ORDER-123"]
 						},
-						"description": "Main entry point - triggers full flow A → B → C → D → A (callback)"
+						"description": "Main entry point - triggers full flow:\n- A → B (sync)\n- A → C (sync)\n- B → C (sync)\n- B → A (sync callback)\n- C → A (sync callback)\n- A → D (async via RabbitMQ)\n- B → D (async via RabbitMQ)\n- C → D (async via RabbitMQ)\n- D → A (callback after async processing)"
 					},
 					"response": []
 				},
 				{
-					"name": "Callback Handler",
+					"name": "Callback from Service D",
 					"request": {
 						"method": "GET",
 						"header": [],
@@ -37,7 +37,39 @@
 							"port": "8080",
 							"path": ["api", "callback", "ORDER-123"]
 						},
-						"description": "Callback endpoint called by Service D"
+						"description": "Callback endpoint called by Service D after async processing"
+					},
+					"response": []
+				},
+				{
+					"name": "Process Callback from Service B",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/process/ORDER-123",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["process", "ORDER-123"]
+						},
+						"description": "Sync callback endpoint - B → A"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Callback from Service C",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8080/verify/ORDER-123",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["verify", "ORDER-123"]
+						},
+						"description": "Sync callback endpoint - C → A"
 					},
 					"response": []
 				},
@@ -73,7 +105,7 @@
 							"port": "8081",
 							"path": ["order", "ORDER-123"]
 						},
-						"description": "Process order, calls Service C and Service D"
+						"description": "Process order - triggers:\n- B → C (sync inventory check)\n- B → A (sync callback)\n- B → D (async notification via RabbitMQ)"
 					},
 					"response": []
 				},
@@ -109,7 +141,7 @@
 							"port": "8082",
 							"path": ["inventory", "ORDER-123"]
 						},
-						"description": "Check inventory and notify Service D"
+						"description": "Check inventory - triggers:\n- C → A (sync verification callback)\n- C → D (async notification via RabbitMQ)"
 					},
 					"response": []
 				},
@@ -154,7 +186,7 @@
 							"port": "8083",
 							"path": ["notify"]
 						},
-						"description": "Send notification (sync + async via RabbitMQ)"
+						"description": "Send notification directly (manual test) - normally messages arrive via RabbitMQ from A, B, C"
 					},
 					"response": []
 				},
@@ -297,7 +329,7 @@
 								}
 							]
 						},
-						"description": "Get service dependency graph data"
+						"description": "Get service dependency graph - shows all sync HTTP calls:\n- A → B, A → C\n- B → C, B → A\n- C → A\n- D → A\n\nNote: Async RabbitMQ messages (A,B,C → D) are traced but not shown in dependency graph"
 					},
 					"response": []
 				}
@@ -318,7 +350,7 @@
 							"port": "8080",
 							"path": ["api", "order", "FULL-FLOW-TEST"]
 						},
-						"description": "Test complete flow: A → B → C → D → RabbitMQ → D → A (callback)"
+						"description": "Test complete distributed tracing flow:\n\nSynchronous HTTP calls:\n- A → B (order processing)\n- A → C (inventory check)\n- B → C (inventory verification)\n- B → A (process callback)\n- C → A (verify callback)\n\nAsynchronous RabbitMQ:\n- A → D (order created notification)\n- B → D (order processed notification)\n- C → D (inventory reserved notification)\n- D processes all 3 messages async\n- D → A (callback after processing)\n\nCheck trace in Zipkin UI after running this request!"
 					},
 					"response": []
 				},
