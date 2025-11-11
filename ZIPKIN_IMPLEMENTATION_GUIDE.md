@@ -43,26 +43,54 @@ Distributed tracing tracks requests as they flow through multiple microservices,
 ## Architecture
 
 ```
-┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│  Service A  │─────▶│  Service B  │─────▶│  Service C  │
-│  (Port 8080)│      │  (Port 8081)│      │  (Port 8082)│
-└─────────────┘      └─────────────┘      └─────────────┘
-       │                    │                    │
-       │                    │                    │
-       └────────────────────┴────────────────────┘
-                            │
-                            ▼
-                    ┌─────────────┐
-                    │   Zipkin    │
-                    │  (Port 9411)│
-                    └─────────────┘
+Synchronous HTTP Calls:
+  A → B, A → C, B → C, B → A, C → A
+
+Asynchronous RabbitMQ:
+  A → D, B → D, C → D
+
+Visual Diagram:
+┌──────────────────────────────────────┐
+│         Service A (8080)             │
+│          API Gateway                 │
+└──┬──────┬────▲────────▲──────────────┘
+   │      │    │        │
+ sync   sync  sync    sync
+   │      │    │        │
+   ▼      ▼    │        │
+┌──────┐ ┌────────┐    │
+│  B   │─│   C    │────┘
+│ 8081 │ │  8082  │
+└──┬───┘ └───┬────┘
+   │         │
+  async    async
+   │         │
+   └────┬────┘
+        ▼
+   ┌─────────┐
+   │RabbitMQ │
+   └────┬────┘
+        │
+      async
+        ▼
+   ┌─────────┐
+   │    D    │
+   │  8083   │
+   └─────────┘
 ```
+
+All services report traces to Zipkin on port 9411.
 
 **Trace Flow:**
 1. Request comes to Service A
-2. Service A calls Service B (trace context propagated)
-3. Service B calls Service C (trace context propagated)
-4. All services send span data to Zipkin
+2. Service A calls Service B and C (sync - trace context propagated via HTTP headers)
+3. Service B calls Service C and A (sync - trace context propagated)
+4. Service C calls Service A (sync callback - trace context propagated)
+5. Services A, B, C send async messages to RabbitMQ (trace context in message headers)
+6. Service D processes messages from queue (trace context preserved)
+7. All services send span data to Zipkin
+
+---
 5. Zipkin aggregates and displays the complete trace
 
 ---
@@ -104,6 +132,12 @@ Add these dependencies to `pom.xml` for **each microservice**:
         <groupId>io.zipkin.reporter2</groupId>
         <artifactId>zipkin-reporter-brave</artifactId>
     </dependency>
+    
+    <!-- RabbitMQ for async messaging (Services A, B, C, D) -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-amqp</artifactId>
+    </dependency>
 </dependencies>
 ```
 
@@ -112,6 +146,7 @@ Add these dependencies to `pom.xml` for **each microservice**:
 - **spring-boot-starter-aop**: Required for annotation-based tracing
 - **micrometer-tracing-bridge-brave**: Tracing implementation (Brave is Zipkin-compatible)
 - **zipkin-reporter-brave**: Sends trace data to Zipkin server
+- **spring-boot-starter-amqp**: RabbitMQ support with automatic trace propagation
 
 ---
 
@@ -144,14 +179,20 @@ management.zipkin.tracing.endpoint=http://localhost:9411/api/v2/spans
 logging.pattern.level=%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]
 ```
 
-#### Service C (application.properties)
+#### Service D (application.properties)
 ```properties
-spring.application.name=service-c
-server.port=8082
+spring.application.name=service-d
+server.port=8083
 
 management.tracing.sampling.probability=1.0
 management.zipkin.tracing.endpoint=http://localhost:9411/api/v2/spans
 logging.pattern.level=%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-}]
+
+# RabbitMQ Configuration
+spring.rabbitmq.host=localhost
+spring.rabbitmq.port=5672
+spring.rabbitmq.username=guest
+spring.rabbitmq.password=guest
 ```
 
 **Configuration Explained:**
@@ -160,6 +201,7 @@ logging.pattern.level=%5p [${spring.application.name:},%X{traceId:-},%X{spanId:-
   - For production, use 0.1 (10%) to reduce overhead
 - **management.zipkin.tracing.endpoint**: Where to send trace data
 - **logging.pattern**: Adds trace/span IDs to log output
+- **spring.rabbitmq.***: RabbitMQ connection settings (trace context auto-propagated)
 
 ---
 
