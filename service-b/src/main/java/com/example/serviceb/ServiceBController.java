@@ -3,6 +3,7 @@ package com.example.serviceb;
 import io.micrometer.observation.annotation.Observed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +17,9 @@ public class ServiceBController {
     
     @Autowired
     private RestTemplate restTemplate;
+    
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
     
     @GetMapping("/order/{orderId}")
     public String processOrder(@PathVariable String orderId) {
@@ -33,10 +37,15 @@ public class ServiceBController {
         
         applyBusinessRules(orderId, orderAmount);
         
-        notifyServiceD(orderId, "PROCESSED");
+        String callbackResponse = restTemplate.getForObject(
+            "http://localhost:8080/process/" + orderId,
+            String.class
+        );
+        
+        sendAsyncNotification(orderId, "ORDER_PROCESSED");
         
         logger.info("Service B: Order {} processed successfully", orderId);
-        return "Service B (Order) -> " + inventoryResponse;
+        return "Service B -> C: " + inventoryResponse;
     }
     
     @GetMapping("/health")
@@ -75,18 +84,21 @@ public class ServiceBController {
         }
     }
     
-    private void notifyServiceD(String orderId, String status) {
-        logger.info("Service B: Notifying Service D about order {}", orderId);
+    @Observed(name = "service-b.send-async-notification")
+    private void sendAsyncNotification(String orderId, String eventType) {
+        logger.info("Service B: Sending async notification to Service D for order {}", orderId);
         try {
-            String payload = String.format("{\"orderId\":\"%s\",\"type\":\"ORDER_UPDATE\",\"status\":\"%s\",\"channel\":\"EMAIL\",\"callbackRequired\":true}", 
-                orderId, status);
-            restTemplate.postForObject(
-                "http://localhost:8083/notify", 
-                payload,
-                String.class
-            );
+            NotificationRequest notification = new NotificationRequest();
+            notification.setOrderId(orderId);
+            notification.setType(eventType);
+            notification.setStatus("PROCESSED");
+            notification.setChannel("SMS");
+            notification.setCallbackRequired(false);
+            
+            rabbitTemplate.convertAndSend("notification-queue", notification);
+            logger.info("Service B: Notification sent to queue");
         } catch (Exception e) {
-            logger.warn("Service B: Failed to notify Service D: {}", e.getMessage());
+            logger.warn("Service B: Failed to send async notification: {}", e.getMessage());
         }
     }
 }

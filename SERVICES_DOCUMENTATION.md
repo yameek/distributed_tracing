@@ -2,7 +2,7 @@
 
 **Date:** November 10, 2025  
 **Project:** Distributed Tracing with Spring Boot  
-**Current State:** 4 Services with Async Messaging & Circular Dependencies
+**Current State:** 4 Services with Complex Sync & Async Communication
 
 ---
 
@@ -15,7 +15,7 @@
 5. [Service C - Inventory Service](#service-c--inventory-service)
 6. [Service D - Notification Service](#service-d--notification-service)
 7. [RabbitMQ Integration](#rabbitmq-integration)
-8. [Circular Dependencies](#circular-dependencies)
+8. [Communication Patterns](#communication-patterns)
 9. [Complete Request Flow](#complete-request-flow)
 10. [Technology Stack](#technology-stack)
 11. [How to Run](#how-to-run)
@@ -25,15 +25,15 @@
 
 ## Overview
 
-This is a **four-tier microservices architecture** with async messaging demonstrating a complete order processing and notification pipeline. Each service handles a specific business domain with both synchronous and asynchronous communication patterns.
+This is a **four-tier microservices architecture** demonstrating complex communication patterns with both synchronous and asynchronous messaging.
 
-### Current Status: ✅ COMPLETE WITH ASYNC MESSAGING
+### Current Status: ✅ COMPLETE WITH COMPLEX DEPENDENCIES
 
 The services include:
-- **Synchronous HTTP calls** between services
+- **Synchronous HTTP calls** with bidirectional communication
 - **Asynchronous messaging** via RabbitMQ
 - **Circular dependencies** for complex tracing scenarios
-- **Multiple internal operations** per service for detailed span visibility
+- **Multiple internal operations** per service for detailed observability
 
 ### Key Characteristics
 
@@ -41,9 +41,8 @@ The services include:
 - **Framework:** Spring Boot 3.2.0
 - **Build Tool:** Maven 3.6+
 - **Architecture Pattern:** Microservices with sync HTTP + async messaging
-- **Message Broker:** RabbitMQ (for Service D)
+- **Message Broker:** RabbitMQ
 - **Services:** 4 microservices (A, B, C, D)
-- **Total Operations:** 25+ operations per request
 
 ---
 
@@ -52,38 +51,137 @@ The services include:
 ### System Diagram
 
 ```
-Service Flow:
-1. A → B → C → D (main flow)
-2. B → D (order notification)
-3. C → D (inventory notification)
-4. D → RabbitMQ → D (async processing)
-5. D → A (callback - creates circular dependency)
+Synchronous Calls (HTTP):
+  A → B    (A calls B for order processing)
+  A → C    (A calls C for inventory check)
+  B → C    (B calls C for inventory verification)
+  B → A    (B callbacks to A after processing)
+  C → A    (C callbacks to A for verification)
 
-   ┌──────────┐      ┌──────────┐      ┌──────────┐      ┌──────────┐
-   │Service A │─────▶│Service B │─────▶│Service C │─────▶│Service D │
-   │  (8080)  │      │  (8081)  │      │  (8082)  │      │  (8083)  │
-   └──────────┘      └──────────┘      └──────────┘      └──────────┘
-        ▲                  │                  │                  │
-        │                  │                  │                  │
-        │                  └──────────────────┼─────────────────▶│
-        │                                     │                  │
-        │                                     └─────────────────▶│
-        │                                                        │
-        │                    ┌──────────────┐                   │
-        │                    │  RabbitMQ    │◀──────────────────┘
-        │                    │  Queue       │
-        │                    └──────────────┘
-        │                           │
-        │                           ▼
-        │                    [Async Processing]
-        │                           │
-        └───────────────────────────┴──────────────────────────────
-                            (Callback)
+Asynchronous Calls (RabbitMQ):
+  A → D    (A sends order created notification)
+  B → D    (B sends order processed notification)
+  C → D    (C sends inventory reserved notification)
+
+Visual Representation:
+
+   ┌──────────────────────────────────────────────────────────┐
+   │                     Service A (8080)                      │
+   │                      API Gateway                          │
+   └─────┬────────────┬───────────▲──────────────▲────────────┘
+         │            │           │              │
+      sync│         sync│      sync callback  sync callback
+         │            │           │              │
+         ▼            ▼           │              │
+   ┌──────────┐  ┌──────────┐    │              │
+   │Service B │  │Service C │────┘              │
+   │ (8081)   │──│ (8082)   │───────────────────┘
+   │  Order   │  │Inventory │
+   └────┬─────┘  └────┬─────┘
+        │             │
+     async│         async│
+        │             │
+        ▼             ▼
+   ┌────────────────────────────┐
+   │      RabbitMQ Queue        │
+   │   (notification-queue)     │
+   └──────────┬─────────────────┘
+              │
+           async│
+              ▼
+   ┌──────────────────────────┐
+   │      Service D (8083)    │
+   │   Notification Service   │
+   └──────────────────────────┘
 ```
 
 ---
 
-## Service D - Notification Service
+## Service A - API Gateway
+
+### Overview
+**Port:** 8080  
+**Purpose:** Entry point for all requests, orchestrates calls to other services  
+**Technology:** Spring Boot + Spring AMQP (RabbitMQ)
+
+### Responsibilities
+- Accept client requests
+- Validate incoming requests
+- Call Service B for order processing
+- Call Service C for inventory verification
+- Send async notifications to Service D via RabbitMQ
+- Receive callbacks from Service B and C
+
+### Endpoints
+- `GET /api/order/{orderId}` - Main order processing endpoint
+- `GET /process/{orderId}` - Callback endpoint from Service B
+- `GET /verify/{orderId}` - Callback endpoint from Service C
+- `GET /health` - Health check
+
+### Internal Operations
+1. **validateRequest()** - Validates order ID
+2. **prepareOrderMetadata()** - Creates order metadata
+3. **formatResponse()** - Formats final response
+4. **sendAsyncNotification()** - Sends notification to RabbitMQ
+5. **processCallback()** - Processes callbacks from B
+6. **verifyOrder()** - Verifies callbacks from C
+7. **updateOrderStatus()** - Updates order status
+
+---
+
+## Service B - Order Service
+
+### Overview
+**Port:** 8081  
+**Purpose:** Handles order processing logic  
+**Technology:** Spring Boot + Spring AMQP (RabbitMQ)
+
+### Responsibilities
+- Process orders received from Service A
+- Verify inventory with Service C
+- Apply business rules
+- Calculate order amounts
+- Send callbacks to Service A
+- Send async notifications to Service D via RabbitMQ
+
+### Endpoints
+- `GET /order/{orderId}` - Process order
+- `GET /health` - Health check
+
+### Internal Operations
+1. **checkOrderEligibility()** - Validates order eligibility (50ms)
+2. **calculateOrderAmount()** - Calculates total amount (30ms)
+3. **applyBusinessRules()** - Applies pricing rules (20ms)
+4. **sendAsyncNotification()** - Sends to RabbitMQ queue
+
+---
+
+## Service C - Inventory Service
+
+### Overview
+**Port:** 8082  
+**Purpose:** Manages inventory and stock levels  
+**Technology:** Spring Boot + Spring AMQP (RabbitMQ)
+
+### Responsibilities
+- Check inventory availability
+- Reserve stock for orders
+- Update inventory cache
+- Send callbacks to Service A
+- Send async notifications to Service D via RabbitMQ
+
+### Endpoints
+- `GET /inventory/{orderId}` - Check inventory
+- `GET /health` - Health check
+
+### Internal Operations
+1. **queryDatabase()** - Queries inventory database (50ms)
+2. **checkStockLevel()** - Checks available stock (40ms)
+3. **reserveInventory()** - Reserves stock (30ms)
+4. **updateInventoryCache()** - Updates cache (20ms)
+5. **sendAsyncNotification()** - Sends to RabbitMQ queue
+
+---
 
 ### Overview
 **Port:** 8083  
@@ -112,6 +210,38 @@ Service Flow:
 3. **formatNotificationContent()** - Formats final content (25ms)
 4. **deliverNotification()** - Delivers to channel (50ms)
 5. **sendCallbackToServiceA()** - Async callback to Service A
+
+---
+
+## Communication Patterns
+
+### Synchronous HTTP Calls
+| From | To | Purpose | Endpoint |
+|------|-----|---------|----------|
+| A | B | Process order | GET /order/{orderId} |
+| A | C | Check inventory | GET /inventory/{orderId} |
+| B | C | Verify inventory | GET /inventory/{orderId} |
+| B | A | Callback after processing | GET /process/{orderId} |
+| C | A | Callback for verification | GET /verify/{orderId} |
+
+### Asynchronous RabbitMQ Calls
+| From | To | Purpose | Queue | Event Type |
+|------|-----|---------|-------|------------|
+| A | D | Order created notification | notification-queue | ORDER_CREATED |
+| B | D | Order processed notification | notification-queue | ORDER_PROCESSED |
+| C | D | Inventory reserved notification | notification-queue | INVENTORY_RESERVED |
+
+### Call Flow Diagram
+```
+Step 1: Client → A
+Step 2: A → B (sync)
+Step 3: B → C (sync)
+Step 4: C → A (sync callback)
+Step 5: B → A (sync callback)
+Step 6: A → D (async via RabbitMQ)
+Step 7: B → D (async via RabbitMQ)
+Step 8: C → D (async via RabbitMQ)
+```
 
 ---
 
@@ -161,8 +291,42 @@ This creates a rich dependency graph for tracing visualization.
 
 ```
 1. User → Service A: GET /api/order/ORDER-123
-   ├─ Validate request
-   ├─ Prepare metadata
+
+2. Service A:
+   ├─ validateRequest()
+   ├─ prepareOrderMetadata()
+   ├─ Call Service B: GET /order/ORDER-123 (sync)
+   ├─ Call Service C: GET /inventory/ORDER-123 (sync)
+   ├─ sendAsyncNotification() → RabbitMQ (async)
+   └─ formatResponse()
+
+3. Service B (from A's call):
+   ├─ checkOrderEligibility()
+   ├─ calculateOrderAmount()
+   ├─ Call Service C: GET /inventory/ORDER-123 (sync)
+   ├─ applyBusinessRules()
+   ├─ Call Service A: GET /process/ORDER-123 (sync callback)
+   └─ sendAsyncNotification() → RabbitMQ (async)
+
+4. Service C (from B's call):
+   ├─ queryDatabase()
+   ├─ checkStockLevel()
+   ├─ reserveInventory()
+   ├─ updateInventoryCache()
+   ├─ Call Service A: GET /verify/ORDER-123 (sync callback)
+   └─ sendAsyncNotification() → RabbitMQ (async)
+
+5. Service D (async processing from RabbitMQ):
+   ├─ Receives 3 messages from queue (A, B, C)
+   ├─ prepareNotificationData()
+   ├─ enrichNotificationWithUserData()
+   ├─ formatNotificationContent()
+   └─ deliverNotification()
+
+Total: ~15-20 synchronous spans + 3 async message processing spans
+```
+
+---
    ├─ Format response
    
 2. Service A → Service B: GET /order/ORDER-123
