@@ -1,14 +1,17 @@
 package com.example.serviceb;
 
 import io.micrometer.observation.annotation.Observed;
+import io.micrometer.tracing.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 public class ServiceBController {
@@ -21,9 +24,49 @@ public class ServiceBController {
     @Autowired
     private RabbitTemplate rabbitTemplate;
     
+    @Autowired
+    private Tracer tracer;
+    
     @GetMapping("/order/{orderId}")
     public String processOrder(@PathVariable String orderId) {
         logger.info("Service B: Processing order {}", orderId);
+        
+        // Simulate failure scenarios for demonstration
+        if (orderId.equals("timeout-order")) {
+            logger.error("Service B: Timeout processing order {}", orderId);
+            tagError("timeout", "Order processing timeout exceeded");
+            throw new ResponseStatusException(
+                HttpStatus.REQUEST_TIMEOUT, 
+                "Order processing timeout exceeded"
+            );
+        }
+        
+        if (orderId.equals("invalid-order")) {
+            logger.error("Service B: Invalid order format {}", orderId);
+            tagError("validation", "Invalid order ID format");
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST, 
+                "Invalid order ID format"
+            );
+        }
+        
+        if (orderId.equals("not-found-order")) {
+            logger.error("Service B: Order not found {}", orderId);
+            tagError("not_found", "Order not found in database");
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND, 
+                "Order not found in database"
+            );
+        }
+        
+        if (orderId.equals("db-error-order")) {
+            logger.error("Service B: Database error for order {}", orderId);
+            tagError("database", "Database connection failed");
+            throw new ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Database connection failed"
+            );
+        }
         
         checkOrderEligibility(orderId);
         
@@ -46,6 +89,14 @@ public class ServiceBController {
         
         logger.info("Service B: Order {} processed successfully", orderId);
         return "Service B -> C: " + inventoryResponse;
+    }
+    
+    private void tagError(String errorType, String errorMessage) {
+        if (tracer.currentSpan() != null) {
+            tracer.currentSpan().tag("error", "true");
+            tracer.currentSpan().tag("error.type", errorType);
+            tracer.currentSpan().tag("error.message", errorMessage);
+        }
     }
     
     @GetMapping("/health")

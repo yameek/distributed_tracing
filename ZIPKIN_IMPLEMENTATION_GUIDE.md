@@ -731,6 +731,304 @@ public class ObservationConfig {
 
 ---
 
+### Tracing Failed Requests and Exceptions
+
+Zipkin automatically captures failed requests and exceptions. Failed spans are marked with error tags.
+
+#### Example: Controller with Error Handling
+
+```java
+package com.example.servicea;
+
+import io.micrometer.tracing.Tracer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
+
+@RestController
+public class ServiceAController {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ServiceAController.class);
+    
+    @Autowired
+    private RestTemplate restTemplate;
+    
+    @Autowired
+    private Tracer tracer;
+    
+    @GetMapping("/api/order/{orderId}")
+    public ResponseEntity<String> getOrder(@PathVariable String orderId) {
+        logger.info("Service A: Received request for order {}", orderId);
+        
+        try {
+            // Simulate validation failure for certain orders
+            if (orderId.startsWith("invalid-")) {
+                throw new IllegalArgumentException("Invalid order ID format");
+            }
+            
+            // Call Service B - this might fail
+            String orderResponse = restTemplate.getForObject(
+                "http://localhost:8081/order/" + orderId, 
+                String.class
+            );
+            
+            logger.info("Service A: Completed request for order {}", orderId);
+            return ResponseEntity.ok("Service A -> " + orderResponse);
+            
+        } catch (IllegalArgumentException e) {
+            // Validation error - adds error tag to span
+            logger.error("Service A: Validation error for order {}", orderId, e);
+            if (tracer.currentSpan() != null) {
+                tracer.currentSpan().tag("error", e.getMessage());
+                tracer.currentSpan().tag("error.type", "validation");
+            }
+            return ResponseEntity.badRequest().body("Validation failed: " + e.getMessage());
+            
+        } catch (HttpClientErrorException e) {
+            // HTTP error from downstream service
+            logger.error("Service A: Downstream service error for order {}", orderId, e);
+            if (tracer.currentSpan() != null) {
+                tracer.currentSpan().tag("error", e.getMessage());
+                tracer.currentSpan().tag("http.status_code", String.valueOf(e.getStatusCode().value()));
+            }
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body("Service unavailable: " + e.getMessage());
+            
+        } catch (Exception e) {
+            // Unexpected error
+            logger.error("Service A: Unexpected error for order {}", orderId, e);
+            if (tracer.currentSpan() != null) {
+                tracer.currentSpan().tag("error", e.getMessage());
+                tracer.currentSpan().tag("error.type", e.getClass().getSimpleName());
+            }
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Internal error: " + e.getMessage());
+        }
+    }
+}
+```
+
+#### Example: Service B with Simulated Failures
+
+```java
+package com.example.serviceb;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+@RestController
+public class ServiceBController {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ServiceBController.class);
+    
+    @GetMapping("/order/{orderId}")
+    public String processOrder(@PathVariable String orderId) {
+        logger.info("Service B: Processing order {}", orderId);
+        
+        // Simulate different failure scenarios
+        if (orderId.equals("timeout-123")) {
+            logger.error("Service B: Timeout processing order {}", orderId);
+            throw new ResponseStatusException(
+                HttpStatus.REQUEST_TIMEOUT, 
+                "Order processing timeout"
+            );
+        }
+        
+        if (orderId.equals("not-found-456")) {
+            logger.error("Service B: Order not found {}", orderId);
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND, 
+                "Order not found in system"
+            );
+        }
+        
+        if (orderId.equals("error-789")) {
+            logger.error("Service B: Database error for order {}", orderId);
+            throw new ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR, 
+                "Database connection failed"
+            );
+        }
+        
+        // Successful case
+        logger.info("Service B: Order {} processed successfully", orderId);
+        return "Service B: Order processed";
+    }
+}
+```
+
+#### Global Exception Handler
+
+Add a global exception handler to automatically tag all errors:
+
+```java
+package com.example.servicea;
+
+import io.micrometer.tracing.Tracer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.ResourceAccessException;
+
+@ControllerAdvice
+public class GlobalExceptionHandler {
+    
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    
+    @Autowired
+    private Tracer tracer;
+    
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<String> handleValidationError(IllegalArgumentException ex) {
+        logger.error("Validation error: {}", ex.getMessage());
+        tagSpanWithError(ex, "validation");
+        return ResponseEntity.badRequest().body("Validation error: " + ex.getMessage());
+    }
+    
+    @ExceptionHandler(HttpClientErrorException.class)
+    public ResponseEntity<String> handleHttpClientError(HttpClientErrorException ex) {
+        logger.error("HTTP client error: {} - {}", ex.getStatusCode(), ex.getMessage());
+        tagSpanWithError(ex, "http_client");
+        if (tracer.currentSpan() != null) {
+            tracer.currentSpan().tag("http.status_code", String.valueOf(ex.getStatusCode().value()));
+        }
+        return ResponseEntity.status(ex.getStatusCode()).body("Downstream error: " + ex.getMessage());
+    }
+    
+    @ExceptionHandler(ResourceAccessException.class)
+    public ResponseEntity<String> handleConnectionError(ResourceAccessException ex) {
+        logger.error("Connection error: {}", ex.getMessage());
+        tagSpanWithError(ex, "connection");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body("Service unavailable: Connection failed");
+    }
+    
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<String> handleGeneralError(Exception ex) {
+        logger.error("Unexpected error: {}", ex.getMessage(), ex);
+        tagSpanWithError(ex, "unexpected");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body("Internal error: " + ex.getMessage());
+    }
+    
+    private void tagSpanWithError(Exception ex, String errorType) {
+        if (tracer.currentSpan() != null) {
+            tracer.currentSpan().tag("error", "true");
+            tracer.currentSpan().tag("error.type", errorType);
+            tracer.currentSpan().tag("error.message", ex.getMessage());
+            tracer.currentSpan().tag("error.class", ex.getClass().getSimpleName());
+        }
+    }
+}
+```
+
+#### Testing Failed Cases
+
+**Test validation error:**
+```bash
+curl http://localhost:8080/api/order/invalid-12345
+# Expected: 400 Bad Request with error span in Zipkin
+```
+
+**Test downstream timeout:**
+```bash
+curl http://localhost:8080/api/order/timeout-123
+# Expected: 408 Request Timeout with error span
+```
+
+**Test not found error:**
+```bash
+curl http://localhost:8080/api/order/not-found-456
+# Expected: 404 Not Found with error span
+```
+
+**Test server error:**
+```bash
+curl http://localhost:8080/api/order/error-789
+# Expected: 500 Internal Server Error with error span
+```
+
+#### Viewing Failed Traces in Zipkin
+
+1. **Open Zipkin UI:** http://localhost:9411
+
+2. **Filter by error tags:**
+   - Click "Add criteria"
+   - Select "Tags"
+   - Enter: `error=true`
+   - Click "Run Query"
+
+3. **Failed spans are marked in red** in the timeline view
+
+4. **Error details appear in span tags:**
+   - `error: true`
+   - `error.type: validation`
+   - `error.message: Invalid order ID format`
+   - `http.status_code: 400`
+
+#### Querying Failed Traces via API
+
+```bash
+# Get all traces with errors
+curl -s 'http://localhost:9411/api/v2/traces?annotationQuery=error' | jq .
+
+# Get traces for a specific service with errors
+curl -s 'http://localhost:9411/api/v2/traces?serviceName=service-a&annotationQuery=error' | jq .
+
+# View error details
+curl -s 'http://localhost:9411/api/v2/trace/{traceId}' | jq '[.[] | select(.tags.error == "true") | {service: .localEndpoint.serviceName, error: .tags.error, errorType: .tags."error.type", errorMsg: .tags."error.message"}]'
+```
+
+#### Best Practices for Error Tracing
+
+1. **Always tag errors with meaningful information:**
+   ```java
+   tracer.currentSpan().tag("error", "true");
+   tracer.currentSpan().tag("error.type", "database");
+   tracer.currentSpan().tag("error.code", "CONNECTION_TIMEOUT");
+   tracer.currentSpan().tag("error.message", ex.getMessage());
+   ```
+
+2. **Use HTTP status codes for HTTP errors:**
+   ```java
+   tracer.currentSpan().tag("http.status_code", "503");
+   tracer.currentSpan().tag("http.status_text", "Service Unavailable");
+   ```
+
+3. **Don't include sensitive data in error tags:**
+   ```java
+   // ❌ Wrong - exposes sensitive data
+   tracer.currentSpan().tag("error.message", "Invalid password for user: " + password);
+   
+   // ✅ Correct - sanitized error message
+   tracer.currentSpan().tag("error.message", "Authentication failed");
+   tracer.currentSpan().tag("error.type", "auth_failure");
+   ```
+
+4. **Log errors with trace IDs for correlation:**
+   ```java
+   logger.error("Service failed for order {} [traceId: {}, spanId: {}]", 
+       orderId, 
+       tracer.currentSpan().context().traceId(),
+       tracer.currentSpan().context().spanId(),
+       ex);
+   ```
+
+---
+
 ### Using WebClient Instead of RestTemplate
 
 For reactive applications using WebClient:
