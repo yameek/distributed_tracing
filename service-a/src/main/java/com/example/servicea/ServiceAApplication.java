@@ -1,5 +1,8 @@
 package com.example.servicea;
 
+import io.micrometer.observation.ObservationRegistry;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.boot.SpringApplication;
@@ -23,5 +26,14 @@ public class ServiceAApplication {
     @Bean
     public MessageConverter jsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
+    }
+    
+    @Bean
+    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, 
+                                          ObservationRegistry observationRegistry) {
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
+        rabbitTemplate.setMessageConverter(jsonMessageConverter());
+        rabbitTemplate.setObservationEnabled(true);
+        return rabbitTemplate;
     }
 }
