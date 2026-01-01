@@ -25,3 +25,9 @@ mvnw.cmd
 .vscode/
 
 .DS_Store
+
+# Service logs
+service-a.log
+service-b.log
+service-c.log
+service-d.log

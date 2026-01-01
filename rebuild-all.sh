@@ -3,7 +3,7 @@
 set -e
 
 echo "========================================="
-echo "Rebuilding All Microservices"
+echo "Rebuilding All Microservices - OpenTelemetry + Tempo"
 echo "========================================="
 
 # Colors for output
@@ -21,24 +21,16 @@ for service in "${SERVICES[@]}"; do
     pkill -f "spring-boot:run.*$service" || true
 done
 
-# Kill Zipkin Docker container
-echo -e "${YELLOW}Stopping Zipkin container...${NC}"
-docker stop zipkin 2>/dev/null || true
-docker rm zipkin 2>/dev/null || true
-
 # Wait for ports to be released
 sleep 3
 
-# Start Zipkin
-echo -e "${YELLOW}Starting Zipkin...${NC}"
-docker run -d --name zipkin -p 9411:9411 openzipkin/zipkin
-
-# Use existing RabbitMQ
-echo -e "${YELLOW}Using existing RabbitMQ instance...${NC}"
+# Start infrastructure with docker-compose
+echo -e "${YELLOW}Starting infrastructure (Tempo, Grafana, RabbitMQ)...${NC}"
+docker-compose up -d tempo grafana rabbitmq
 
 # Wait for services to be ready
-echo -e "${YELLOW}Waiting for Zipkin to start...${NC}"
-sleep 5
+echo -e "${YELLOW}Waiting for infrastructure to start...${NC}"
+sleep 10
 
 # Build all services
 for service in "${SERVICES[@]}"; do
@@ -74,7 +66,8 @@ echo "Service A (API Gateway): http://localhost:8080"
 echo "Service B (Order Service): http://localhost:8081"
 echo "Service C (Inventory Service): http://localhost:8082"
 echo "Service D (Notification Service): http://localhost:8083"
-echo "Zipkin UI: http://localhost:9411"
+echo "Grafana (Traces): http://localhost:3000"
+echo "Tempo (OTLP): http://localhost:4318"
 echo "RabbitMQ Management: http://localhost:15672 (user: guest, password: guest)"
 echo ""
 echo "Logs are available in:"
@@ -94,4 +87,6 @@ curl -s http://localhost:8082/actuator/health > /dev/null && echo -e "${GREEN}�
 curl -s http://localhost:8083/actuator/health > /dev/null && echo -e "${GREEN}✓ Service D is healthy${NC}" || echo -e "${RED}✗ Service D is not responding${NC}"
 
 echo ""
-echo -e "${GREEN}Ready to trace! Try: curl http://localhost:8080/api/order/12345${NC}"
+echo -e "${GREEN}Ready to trace!${NC}"
+echo -e "${YELLOW}Try: curl http://localhost:8080/api/order/ORDER-12345${NC}"
+echo -e "${YELLOW}Then view traces in Grafana: http://localhost:3000${NC}"
